@@ -1,0 +1,13 @@
+# tinygraph / tinyagent 教程依赖
+#
+# 核心运行时(tinygraph)只用标准库,零依赖。
+# 下面是 "接真实模型" 和 "示例自动读 .env" 需要的可选依赖,按需安装:
+
+# 用 Anthropic(Claude)时:
+anthropic>=0.40.0
+
+# 用任何 OpenAI 兼容服务(OpenAI / DeepSeek / Qwen / Kimi / 本地 vLLM)时:
+openai>=1.50.0
+
+# 让示例自动加载 code/.env(可选,不装也能用 export 环境变量):
+python-dotenv>=1.0.0

@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.env
+code/.env
+ws/
+**/ws/
+
+# Local planning notes
+task_plan.md
+findings.md
+progress.md
