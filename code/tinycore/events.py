@@ -27,11 +27,11 @@ COMPACTION = "compaction"          # 发生了上下文压缩 {before_tokens, af
 RUN_END = "run_end"                # run 结束 {stop_reason, usage}
 ERROR = "error"                    # 不可恢复错误 {error}
 
-
+#类型 + 数据 + 时间戳
 @dataclass
 class Event:
     """一条事件。``data`` 里放什么由 ``type`` 决定（见上方清单注释）。"""
-
+    
     type: str
     data: Dict[str, Any] = field(default_factory=dict)
     ts: float = field(default_factory=time.time)
