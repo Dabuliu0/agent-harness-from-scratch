@@ -92,12 +92,16 @@ def make_coding_tools(
     @tool
     def glob_files(pattern: str) -> str:
         """按通配符递归查找文件名，如 "**/*.py"、"src/*.md"。返回相对路径列表。"""
-        hits: List[str] = []
-        for dirpath, dirnames, filenames in os.walk(root):
+        hits: List[str] = []  #命中结果
+
+        # dirpath：当前正在遍历的文件夹的绝对路径
+        # dirnames：这个文件夹下的子文件夹名称列表
+        # filenames：这个文件夹下的文件名称列表
+        for dirpath, dirnames, filenames in os.walk(root):  #os.walk(root) 是 Python 里遍历目录树的标准方法
             dirnames[:] = [d for d in dirnames if d not in (".git", "__pycache__", "node_modules")]
             for fn in filenames:
-                rel = os.path.relpath(os.path.join(dirpath, fn), root)
-                if fnmatch.fnmatch(rel, pattern) or fnmatch.fnmatch(fn, pattern):
+                rel = os.path.relpath(os.path.join(dirpath, fn), root)  #以root为基准构建相对路径，给人看的
+                if fnmatch.fnmatch(rel, pattern) or fnmatch.fnmatch(fn, pattern):  #通配符搜索
                     hits.append(rel)
         return "\n".join(sorted(hits)[:200]) or "(无匹配)"
 
@@ -105,20 +109,20 @@ def make_coding_tools(
     def grep(pattern: str, path: str = ".", max_matches: int = 50) -> str:
         """在工作区内按正则搜索文件内容，返回 "文件:行号:内容"。
         pattern: Python 正则。path: 限定搜索的子目录，默认全工作区。"""
-        rx = re.compile(pattern)
+        rx = re.compile(pattern)  #把用户输入的正则表达式字符串（比如 "def .*:"）编译成一个“正则对象” rx
         base = _resolve(path)
         hits: List[str] = []
-        limit_reached = False
+        limit_reached = False  #停止标志，
         for dirpath, dirnames, filenames in os.walk(base):
             dirnames[:] = [d for d in dirnames if d not in (".git", "__pycache__", "node_modules")]
             for fn in filenames:
                 fp = os.path.join(dirpath, fn)
-                try:
+                try: 
                     with open(fp, "r", encoding="utf-8") as f:
                         for i, line in enumerate(f, 1):
-                            if rx.search(line):
+                            if rx.search(line):  #用编译好的正则对象在每一行里搜索匹配
                                 rel = os.path.relpath(fp, root)
-                                hits.append(f"{rel}:{i}:{line.rstrip()}")
+                                hits.append(f"{rel}:{i}:{line.rstrip()}")  #把“文件路径:行号:去掉末尾换行符的内容” 拼成一条字符串，存入 hits 列表。
                                 if len(hits) >= max_matches:
                                     limit_reached = True
                                     break
@@ -143,20 +147,27 @@ def make_coding_tools(
         """在工作区目录下执行 shell 命令，返回 exit code 与输出（stdout+stderr 合并）。
         用于运行测试、git、构建等。命令有超时限制；产生大量输出时会被截断。"""
         # 注意：bash 无法被路径 jail 约束（这正是它必须过权限闸门的原因，见第 6 章）
-        r = subprocess.run(
-            command,
-            shell=True,
-            cwd=root,
-            capture_output=True,
-            text=True,
-            timeout=bash_timeout,
+        r = subprocess.run(       #“执行外部命令”函数
+            command,              # 要执行的命令字符串，比如 "ls -la"
+            shell=True,           # 通过系统的 shell（比如 bash）来执行，这样能支持管道、通配符等
+            cwd=root,             # 命令的工作目录设置为工作区根目录（所以你在里面执行 `ls` 看到的就是工作区内容）
+            capture_output=True,  # 捕获命令的输出（标准输出和标准错误）
+            text=True,            # 以文本字符串形式返回（而不是字节），方便后续处理
+            timeout=bash_timeout, # 给命令设定一个最大运行时间（默认 60 秒），防止死循环或卡死
+            # r是一个 CompletedProcess 对象，里面存着：
+          
+            # r.stdout：命令的标准输出（正常打印的信息）
+            # r.stderr：命令的标准错误（报错信息）
+            # r.returncode：命令的退出码（0 通常表示成功）
         )
-        out = (r.stdout or "") + (r.stderr or "")
+        out = (r.stdout or "") + (r.stderr or "")  
         if len(out) > max_output_chars:
             out = out[:max_output_chars] + f"\n…[输出已截断，共 {len(out)} 字符]"
         return f"(exit {r.returncode})\n{out.strip()}"
 
     tools = [read_file, write_file, edit_file, list_dir, glob_files, grep, todo_write]
+
+    #允许执行 Bash 命令？
     if enable_bash:
         tools.append(bash)
     return tools
