@@ -94,8 +94,8 @@ def tool(func: Callable = None, *, name: str = None, max_result_chars: int = 20_
         return Tool(
             name=name or f.__name__,
             description=(f.__doc__ or "").strip(),
-            parameters=_build_parameters(f),
-            func=f,
+            parameters=_build_parameters(f), # 函数()里面的参数
+            func=f,                          # 整个函数对象
             max_result_chars=max_result_chars,
         )
 
