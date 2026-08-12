@@ -86,7 +86,7 @@ _SUMMARIZE_PROMPT = """\
 尚未解决的问题、重要的文件路径/命令/数据。省略：寒暄、失败后已被纠正的弯路细节、\
 工具输出的原文（只留结论）。用条目式中文输出。"""
 
-
+# 把结构化消息列表转成纯文本对话记录，供摘要模型阅读理解。(json->str)
 def _render_transcript(messages: Messages) -> str:
     lines = []
     for m in messages:
