@@ -72,14 +72,15 @@ class Tool:
 
     # “工具返回的数据，如何安全、标准地喂给大模型？”
     def invoke(self, args: Dict[str, Any]) -> str:
-    # 1. 执行函数并统一转字符串，确保模型能消费，大模型（LLM）的API接口只认字符串（str）
-    result = str(self.func(**args))
-  
-    # 2. 截断超长结果，防止撑爆上下文窗口（核心保护机制）
-    if len(result) > self.max_result_chars:
-        omitted = len(result) - self.max_result_chars
-        result = result[:self.max_result_chars] + f"\n…[已截断 {omitted} 字符]"
-    return result
+
+        # 1. 执行函数并统一转字符串，确保模型能消费，大模型（LLM）的API接口只认字符串（str）
+        result = str(self.func(**args))
+
+        # 2. 截断超长结果，防止撑爆上下文窗口（核心保护机制）
+        if len(result) > self.max_result_chars:
+            omitted = len(result) - self.max_result_chars
+            result = result[:self.max_result_chars] + f"\n…[已截断 {omitted} 字符]"
+        return result
 
 
 def tool(func: Callable = None, *, name: str = None, max_result_chars: int = 20_000):
