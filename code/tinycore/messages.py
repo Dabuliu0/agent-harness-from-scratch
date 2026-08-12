@@ -20,7 +20,6 @@ from typing import Any, Dict, List, Optional
 def _new_id() -> str:
     return uuid.uuid4().hex[:12]
 
-
 @dataclass
 class ToolCall:
     """模型发出的一次工具调用请求。
@@ -30,6 +29,12 @@ class ToolCall:
     ``id`` 用于把工具结果配对回这次调用（模型一轮可能发多个调用）。
     """
 
+    # 它记录了 AI 想调哪个工具（name）、传什么参数（args），以及这张单子的编号（id）
+  
+    # 应用场景:AI模型决定调用工具时，返回的是不是最终回答，而是结构化指令
+    # 将模型返回的JSON解析成ToolCall对象，并放回AIMessage 的 tool_calls 列表里，
+    # 当列表不为空时，就会把里面的对象传给工具执行函数_execute_one 
+    
     name: str
     args: Dict[str, Any]
     id: str = field(default_factory=_new_id)
@@ -113,7 +118,7 @@ class ToolMessage(BaseMessage):
     """
 
     tool_call_id: str = ""
-    name: str = ""
+    name: str = ""  
     is_error: bool = False
 
     @property
@@ -124,6 +129,7 @@ class ToolMessage(BaseMessage):
 AnyMessage = BaseMessage
 Messages = List[BaseMessage]
 
+# 反序列化查找表
 _MESSAGE_TYPES = {
     "SystemMessage": SystemMessage,
     "HumanMessage": HumanMessage,
@@ -137,14 +143,22 @@ def to_jsonable(obj: Any) -> Any:
 
     会话日志（第 5 章）逐行写 JSON，靠 ``__type__`` 在读回时还原成对象。
     """
+
+    # （System/Human/AI/Tool）时触发。贴标签 + 递归处理内部。
     if isinstance(obj, BaseMessage):
         d = asdict(obj)
         d["__type__"] = type(obj).__name__
         return {k: to_jsonable(v) for k, v in d.items()}
+
+    # 遇到工具调用请求或用量统计时触发。这些是纯数据，直接转字典，无需贴标签
     if isinstance(obj, (ToolCall, Usage)):
         return asdict(obj)
+
+    # 遇到嵌套在里面的普通字典或列表时触发。递归继续往下扒。
     if isinstance(obj, dict):
         return {k: to_jsonable(v) for k, v in obj.items()}
+
+    # 遇到最底层的字符串、数字时触发。停止递归。
     if isinstance(obj, (list, tuple)):
         return [to_jsonable(v) for v in obj]
     return obj
@@ -152,12 +166,19 @@ def to_jsonable(obj: Any) -> Any:
 
 def from_jsonable(obj: Any) -> Any:
     """``to_jsonable`` 的逆操作：把带 ``__type__`` 的 dict 还原成消息对象。"""
+
+    # 列表 → 递归处理每个元素
     if isinstance(obj, list):
         return [from_jsonable(x) for x in obj]
+
     if isinstance(obj, dict):
         t = obj.get("__type__")
+
+        # 带标签 → 还原成对应消息对象
         if t in _MESSAGE_TYPES:
             data = {k: from_jsonable(v) for k, v in obj.items() if k != "__type__"}
+
+            # ToolCall/Usage类打包时没贴标签，现在强行拧回对象
             if "tool_calls" in data:
                 data["tool_calls"] = [
                     ToolCall(**tc) if isinstance(tc, dict) else tc
@@ -165,6 +186,11 @@ def from_jsonable(obj: Any) -> Any:
                 ]
             if "usage" in data and isinstance(data["usage"], dict):
                 data["usage"] = Usage(**data["usage"])
+
             return _MESSAGE_TYPES[t](**data)
+
+        # 无标签 → 保持字典身份，但递归清洗内部
         return {k: from_jsonable(v) for k, v in obj.items()}
+
+    # 基本类型 → 直接返回
     return obj
