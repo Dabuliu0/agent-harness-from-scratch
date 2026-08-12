@@ -23,7 +23,7 @@ class Agent:
     max_turns: int = 40                # 安全阀：防失控循环（对应 recursion_limit）
     context: Optional[ContextManager] = None
     gate: Optional[Gate] = None        # 权限/钩子接缝（第 6、7 章从这里挂入）
-    parallel_tools: bool = True
+    parallel_tools: bool = True        # 是否并行执行工具
     stream_text: bool = True           # False 则整段返回（省事件量）
     name: str = "agent"
 
