@@ -55,16 +55,18 @@ class Agent:
     # ---- 主循环 ----
 
     def run(
-        self, user_input: Union[str, Messages], prior_messages: Optional[Messages] = None
-    ) -> Generator[Event, None, Messages]:
+        self, user_input: Union[str, Messages], prior_messages: Optional[Messages] = None  # 支持普通用户传一句话，批量传多条消息;支持“接着上次聊”或“重新开始”两种模式
+    ) -> Generator[Event, None, Messages]: # 实时吐 Event 事件，不支持外部传值，最终返回完整历史 Messages
         """执行一次 run，yield 事件流；生成器返回值 = 结束时的完整历史。"""
         self._interrupted = False
+        
+        # list(可迭代对象) 的作用：它会把传入的“可迭代对象”（比如列表、元组、字符串）拆开（迭代），然后把里面的每个元素依次收集到一个新列表里。
         messages: Messages = list(prior_messages or [])
         new_inputs = (
             [HumanMessage(content=user_input)]
             if isinstance(user_input, str)
             else list(user_input)
-        )
+        ) 
         yield Event(ev.RUN_START, {"agent": self.name, "input": new_inputs[0].content if new_inputs else ""})
         for m in new_inputs:
             messages.append(m)
@@ -93,26 +95,40 @@ class Agent:
                     {"before_tokens": before, "after_tokens": estimate_tokens(messages)},
                 )
             if self.context:
-                working = self.context.assemble(self.system_prompt, messages)
+                working = self.context.assemble(self.system_prompt, messages)     # 系统提示词 + 项目记忆 + 额外上下文 一起打包贴最前面
             elif self.system_prompt:
-                working = [SystemMessage(content=self.system_prompt)] + messages
+                working = [SystemMessage(content=self.system_prompt)] + messages  # 只把系统提示词贴最前面
             else:
-                working = list(messages)
+                working = list(messages) # 原样复制一份
 
             # ③ 模型决策（流式：先增量后全量）
             try:
+                # ----- 模式 1：流式输出（打字机效果） -----
                 if self.stream_text:
-                    ai: Optional[AIMessage] = None
+                    ai: Optional[AIMessage] = None    # 用于收集最后吐出的完整 AIMessage
+
+                    # model.stream() 会分两次吐东西，顺序固定：
+                    # ① 先吐出无数个文本碎片（str）→ 实时推给前端
+                    # ② 最后吐出一个完整的 AIMessage（包含内容 + tool_calls + usage）
                     for item in model.stream(working):
                         if isinstance(item, AIMessage):
-                            ai = item
-                        elif item:
+                            ai = item     # 缓存最终完整对象（不对外输出）
+                        elif item:        # 非空文本碎片 → 实时显示
                             yield Event(ev.TEXT_DELTA, {"text": item})
+
+                    # 安全闸门：如果 model.stream() 没按约定返回 AIMessage，直接报错
+                    # 防止后续代码因 ai 为 None 而崩溃
                     assert ai is not None, "stream() 必须以完整 AIMessage 收尾"
+                # ----- 模式 2：整体输出（普通模式） -----     
                 else:
+                    # 阻塞等待，直到模型一次性返回完整 AIMessage
                     ai = model.invoke(working)
+                    
+            # ----- 异常处理：模型挂了必须停机 -----        
             except Exception as e:
+                # 先发错误事件通知外界（前端/日志）
                 yield Event(ev.ERROR, {"error": f"{type(e).__name__}: {e}"})
+                # ★ 和工具执行不同：模型报错无法自救，必须向上抛出，终止整个循环
                 raise
 
             messages.append(ai)
